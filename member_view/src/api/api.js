@@ -11,3 +11,6 @@ export const getAllUsers = async () => {
     throw error;
   }
 };
+export const updateUserMeetStatus = async (email, meet_joined) => {
+  return await axios.put("/api/users/meet-status", { email, meet_joined });
+};

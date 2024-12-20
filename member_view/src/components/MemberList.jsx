@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { getAllUsers } from "../api/api";
+import { getAllUsers, updateUserMeetStatus } from "../api/api";
 import Pusher from "pusher-js";
+import { useNavigate } from "react-router-dom";
 
 const MemberList = () => {
+  const navigate = useNavigate();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
-    // Fetch users
     const fetchMembers = async () => {
       try {
         const data = await getAllUsers();
@@ -23,20 +23,27 @@ const MemberList = () => {
 
     fetchMembers();
 
-    // Set up Pusher to listen for meet-joined and meet-disconnected events
     const pusher = new Pusher("4a3cd9acdccac3af6870", {
       cluster: "ap2",
-      encrypted: true
+      encrypted: true,
     });
 
     const channel = pusher.subscribe("meeting-channel");
 
     channel.bind("meet-joined", (data) => {
-      setNotifications((prev) => [...prev, data.message]);
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.email === data.email ? { ...member, meet_joined: true } : member
+        )
+      );
     });
 
     channel.bind("meet-disconnected", (data) => {
-      setNotifications((prev) => [...prev, data.message]);
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.email === data.email ? { ...member, meet_joined: false } : member
+        )
+      );
     });
 
     return () => {
@@ -44,38 +51,77 @@ const MemberList = () => {
     };
   }, []);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>{error}</p>;
+  const handleButtonClick = async (email, currentStatus) => {
+    const newStatus = !currentStatus;
+
+    try {
+      await updateUserMeetStatus(email, newStatus);
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.email === email ? { ...member, meet_joined: newStatus } : member
+        )
+      );
+     
+    } catch (err) {
+      console.error("Failed to update member status:", err);
+      setError("Failed to update member status. Please try again.");
+    }
+  };
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg font-medium">Loading...</p>
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
 
   return (
-    <div>
-      <h1>Member View</h1>
-      {notifications.length > 0 && (
-        <div className="notifications">
-          <h3>Notifications:</h3>
-          <ul>
-            {notifications.map((notification, index) => (
-              <li key={index}>{notification}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <table>
-        <thead>
-          <tr>
-            <th>Email</th>
-            <th>Meet Joined</th>
-          </tr>
-        </thead>
-        <tbody>
-          {members.map((member, index) => (
-            <tr key={index}>
-              <td>{member.email}</td>
-              <td>{member.meet_joined ? "True" : "False"}</td>
+    <div className="max-w-4xl mx-auto mt-8 bg-white rounded-lg shadow p-6">
+      <h1 className="text-2xl font-bold mb-6">Member View</h1>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="px-6 py-3 text-left text-sm font-semibold">Email</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold">Meet Joined</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y">
+            {members.map((member, index) => (
+              <tr key={index} className="hover:bg-gray-50">
+                <td className="px-6 py-4 text-sm">{member.email}</td>
+                <td className="px-6 py-4">
+                  <button
+                    onClick={() => handleButtonClick(member.email, member.meet_joined)}
+                    className={`px-4 py-1 rounded-full text-sm font-medium ${
+                      member.meet_joined
+                        ? "bg-green-100 text-green-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {member.meet_joined ? "Active" : "Inactive"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-6">
+        <button
+          onClick={() => navigate("/records")}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          Record List
+        </button>
+      </div>
     </div>
   );
 };
